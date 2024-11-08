@@ -2,7 +2,7 @@ import torch as T
 import numpy as np
 import tqdm
 import pickle
-from collections import deque, defaultdict
+from collections import deque
 from itertools import combinations
 
 device = T.device('cpu')
@@ -23,36 +23,53 @@ def make_mlp(l, act=T.nn.LeakyReLU(), tail=[]):
          for n, (i, o) in enumerate(zip(l, l[1:]))], []) + tail))
 
 def make_adj_list(x):
-#Creates an adjacency list from the connections tensor
+    # Generate all possible pairs of nodes (combinations)
     links = list(combinations(range(1, nodes + 1), 2))
-    adjacency_list = defaultdict(list)
+    
+    # Initialize adjacency list with all nodes having empty lists
+    adjacency_list = {i: [] for i in range(1, nodes + 1)}
 
+    # Add edges based on the non-zero values in x
     for i, link in enumerate(x):
-        if link:
-            a,b = links[i]
+        if link:  # If there is a connection (non-zero)
+            a, b = links[i]
             adjacency_list[a].append(b)
             adjacency_list[b].append(a)
 
-    return dict(adjacency_list)
+    return adjacency_list
 
-def bfs_from_node(x,a):
-    #x our adajcency list, a our starting node, d the distances
+# def bfs_from_node(x,a):
+#     queue = deque([a])
+#     d = {a: 0}  
+
+#     while queue:
+#         current_node = queue.popleft()
+
+#         for b in x.get(current_node, []):
+#             if b not in d:  # If not visited yet
+#                 d[b] = d[current_node] + 1
+#                 queue.append(b)
+
+#     for node in x:
+#         if node not in d:
+#             d[node] = -1
+
+#     return list(d.values())
+
+def bfs_from_node(x, a):
     queue = deque([a])
-    d = {a: 0}  
+    d = {a: 0} 
 
     while queue:
         current_node = queue.popleft()
 
         for b in x.get(current_node, []):
-            if b not in d:  # If not visited yet
+            if b not in d:
                 d[b] = d[current_node] + 1
                 queue.append(b)
 
-    for node in x:
-        if node not in d:
-            d[node] = -1
-
-    return list[d.values()]
+    max_node = max(x.keys())
+    return [d.get(node, -1) for node in range(1, max_node + 1)]
 
 def bfs_total(x):
     shortest = []
@@ -62,26 +79,21 @@ def bfs_total(x):
 
         for m in x:
             if m > n:
-                shortest.append(n_distances[m])
+                shortest.append(n_distances[list(x.keys()).index(m)])
 
     return shortest
 
 def shortest_paths(z):    
-    return([bfs_total(make_adj_list(x)) for x in z])
+    return([bfs_total(make_adj_list(z))])
 
 def log_reward(x):
     true_paths = T.tensor([1,2,3,4,1,2,3,1,2,1])
     shortest = shortest_paths(x)
-    paths = T.where(true_paths==0, 0, shortest)
+    paths = T.tensor([0 if tp == 0 else s for tp, s in zip(true_paths, shortest)])
     return -1/(2*var)*(((paths-true_paths + 2*nodes*(x==-1)) ** 2 ).sum())
 
 all_graphs = T.tensor([ [int(digit) for digit in bin(x)[2:].zfill(edges)] for x in range(2**edges)])
-print(all_graphs)
-print(all_graphs[0])
-print(log_reward(all_graphs[0]))
 truelr = T.tensor([log_reward(g) for g in all_graphs])
-print(truelr[124], truelr[125],truelr[127],truelr[551], truelr[511], truelr[1022],truelr[1023])
-print(truelr.argmax().item())
 print('total reward', truelr.logsumexp(0))
 true_dist = truelr.softmax(0).cpu().numpy()
 
@@ -154,7 +166,7 @@ for it in tqdm.trange(10000):
 
     if it%100==0: 
         print('loss =', np.array(losses[-100:]).mean(), 'Z =', Z.item())
-        emp_dist = np.bincount(all_visited[-2000:], minlength=len(true_dist)).astype(float)
+        emp_dist = np.bincount(all_visited[-50000:], minlength=len(true_dist)).astype(float)
         emp_dist /= emp_dist.sum()
         l1 = np.abs(true_dist-emp_dist).mean()
         print('L1 =', l1)
