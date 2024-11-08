@@ -23,38 +23,16 @@ def make_mlp(l, act=T.nn.LeakyReLU(), tail=[]):
          for n, (i, o) in enumerate(zip(l, l[1:]))], []) + tail))
 
 def make_adj_list(x):
-    # Generate all possible pairs of nodes (combinations)
     links = list(combinations(range(1, nodes + 1), 2))
-    
-    # Initialize adjacency list with all nodes having empty lists
     adjacency_list = {i: [] for i in range(1, nodes + 1)}
 
-    # Add edges based on the non-zero values in x
     for i, link in enumerate(x):
-        if link:  # If there is a connection (non-zero)
+        if link:  
             a, b = links[i]
             adjacency_list[a].append(b)
             adjacency_list[b].append(a)
 
     return adjacency_list
-
-# def bfs_from_node(x,a):
-#     queue = deque([a])
-#     d = {a: 0}  
-
-#     while queue:
-#         current_node = queue.popleft()
-
-#         for b in x.get(current_node, []):
-#             if b not in d:  # If not visited yet
-#                 d[b] = d[current_node] + 1
-#                 queue.append(b)
-
-#     for node in x:
-#         if node not in d:
-#             d[node] = -1
-
-#     return list(d.values())
 
 def bfs_from_node(x, a):
     queue = deque([a])
