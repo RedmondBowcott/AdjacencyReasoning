@@ -70,12 +70,6 @@ def log_reward(x):
     paths = T.tensor([0 if tp == 0 else s for tp, s in zip(true_paths, shortest)])
     return -1/(2*var)*(((paths-true_paths + 2*nodes*(x==-1)) ** 2 ).sum())
 
-all_graphs = T.tensor([ [int(digit) for digit in bin(x)[2:].zfill(edges)] for x in range(2**edges)])
-truelr = T.tensor([log_reward(g) for g in all_graphs])
-print('total reward', truelr.logsumexp(0))
-true_dist = truelr.softmax(0).cpu().numpy()
-
-
 Z = T.zeros((1,)).to(device)
 model = make_mlp([edges] + [n_hid] * n_layers + [2*edges+1]).to(device)
 opt = T.optim.Adam([ {'params':model.parameters(), 'lr':0.001}, {'params':[Z], 'lr':0.1} ])
@@ -84,10 +78,10 @@ Z.requires_grad_()
 losses = []
 zs = []
 all_visited = []
-first_visit = -1 * np.ones_like(true_dist)
+first_visit = -1 * np.ones((2**edges))
 l1log = []
 
-for it in tqdm.trange(10000):
+for it in tqdm.trange(2000):
     opt.zero_grad()
     
     z = T.zeros((bs,edges), dtype=T.long).to(device)
@@ -129,7 +123,7 @@ for it in tqdm.trange(10000):
         with T.no_grad():
             z[~done] = z[~done].scatter_add(1, action[~terminate], T.ones(action[~terminate].shape, dtype=T.long, device=device))
 
-    lr = truelr[(z * (2 ** T.arange(edges))).sum(dim=1)]
+    lr = T.tensor([log_reward(z[i].flip(0)) for  i in range (z.size(0))])
     ll_diff -= lr
 
     loss = (ll_diff**2).sum()/(bs)
@@ -144,10 +138,7 @@ for it in tqdm.trange(10000):
 
     if it%100==0: 
         print('loss =', np.array(losses[-100:]).mean(), 'Z =', Z.item())
-        emp_dist = np.bincount(all_visited[-50000:], minlength=len(true_dist)).astype(float)
+        emp_dist = np.bincount(all_visited[-50000:], minlength=2**edges).astype(float)
         emp_dist /= emp_dist.sum()
-        l1 = np.abs(true_dist-emp_dist).mean()
-        print('L1 =', l1)
-        l1log.append((len(all_visited), l1))
 
-pickle.dump([losses,zs,all_visited,first_visit,l1log], open(f'out.pkl','wb'))
+pickle.dump([losses,zs,all_visited,first_visit, nodes, edges], open(f'out.pkl','wb'))
