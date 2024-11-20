@@ -81,7 +81,7 @@ all_visited = []
 first_visit = -1 * np.ones((2**edges))
 l1log = []
 
-for it in tqdm.trange(2000):
+for it in tqdm.trange(5000):
     opt.zero_grad()
     
     z = T.zeros((bs,edges), dtype=T.long).to(device)

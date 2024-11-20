@@ -1,9 +1,7 @@
 import pickle
 import matplotlib.pyplot as plt
-import networkx as nx
 import numpy as np
 from collections import Counter
-from itertools import combinations
 
 with open('out.pkl', 'rb') as f:
     losses, zs, all_visited, first_visit, nodes, edges = pickle.load(f)
@@ -17,7 +15,7 @@ plt.title('Visited States Distribution')
 plt.savefig('visited_states_plot.png') 
 plt.close()
 
-n = 5
+n = 10
 state_counts = Counter(all_visited)
 top_n_states = state_counts.most_common(n)
 
