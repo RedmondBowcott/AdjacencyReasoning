@@ -2,7 +2,10 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import torch.nn.functional as F
 
-class LMReward:
+##We want to only sample the log probabilities of the shortest path sequence, but still condition on the graph sequence
+##Therefore, for example, the relative lengths of the graph are irrelevant. 
+##We compare samples based on the log probs of the fixed shortest paths conditional on the graph described 
+class GraphLMReward:
 
     def __init__(self, model = "gpt2"):
         self.model = AutoModelForCausalLM.from_pretrained(model)

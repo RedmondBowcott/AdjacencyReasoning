@@ -2,14 +2,15 @@ import torch as T
 import numpy as np
 import tqdm
 import pickle
-from collections import deque
-from itertools import combinations
+from LMReward import LMReward
 
 device = T.device('cpu')
+lmreward = LMReward()
 
 nodes = 5
 edges = int(nodes*(nodes-1)/2)
-var = 1
+pairs = [(j, k) for j in range(0, nodes - 1) for k in range(j + 1, nodes)]
+nouns = ['lying', 'cheating', 'helping', 'supporting', 'deceiving']
 
 n_hid = 256
 n_layers = 2
@@ -22,53 +23,22 @@ def make_mlp(l, act=T.nn.LeakyReLU(), tail=[]):
         [[T.nn.Linear(i, o)] + ([act] if n < len(l)-2 else [])
          for n, (i, o) in enumerate(zip(l, l[1:]))], []) + tail))
 
-def make_adj_list(x):
-    links = list(combinations(range(1, nodes + 1), 2))
-    adjacency_list = {i: [] for i in range(1, nodes + 1)}
+def connected_nodes(z):
+#Given adjacency list, returns list of tuples containing connected paths and distance
+    return [(x, y) for i, (x, y) in enumerate(pairs) if z[i-1] == 1]       
 
-    for i, link in enumerate(x):
-        if link:  
-            a, b = links[i]
-            adjacency_list[a].append(b)
-            adjacency_list[b].append(a)
+def graph_str(z):
+#Given adjacency list, returns string describing this list
+#If shortest is true, then gives string stating these shortest paths
+    str = ""
+    z = connected_nodes(z)
+    for (a, b) in z:
+        str += f"{nouns[a]} and {nouns[b]} are connected. "
+    return str
 
-    return adjacency_list
-
-def bfs_from_node(x, a):
-    queue = deque([a])
-    d = {a: 0} 
-
-    while queue:
-        current_node = queue.popleft()
-
-        for b in x.get(current_node, []):
-            if b not in d:
-                d[b] = d[current_node] + 1
-                queue.append(b)
-
-    max_node = max(x.keys())
-    return [d.get(node, -1) for node in range(1, max_node + 1)]
-
-def bfs_total(x):
-    shortest = []
-
-    for n in x:
-        n_distances = bfs_from_node(x, n)
-
-        for m in x:
-            if m > n:
-                shortest.append(n_distances[list(x.keys()).index(m)])
-
-    return shortest
-
-def shortest_paths(z):    
-    return([bfs_total(make_adj_list(z))])
-
-def log_reward(x):
-    true_paths = T.tensor([1,2,3,4,1,2,3,1,2,1])
-    shortest = shortest_paths(x)
-    paths = T.tensor([0 if tp == 0 else s for tp, s in zip(true_paths, shortest)])
-    return -1/(2*var)*(((paths-true_paths + 2*nodes*(x==-1)) ** 2 ).sum())
+def str_convert(z):
+    z = graph_str(z)
+    return (z)
 
 Z = T.zeros((1,)).to(device)
 model = make_mlp([edges] + [n_hid] * n_layers + [2*edges+1]).to(device)
@@ -81,7 +51,7 @@ all_visited = []
 first_visit = -1 * np.ones((2**edges))
 l1log = []
 
-for it in tqdm.trange(5000):
+for it in tqdm.trange(1000):
     opt.zero_grad()
     
     z = T.zeros((bs,edges), dtype=T.long).to(device)
@@ -123,7 +93,8 @@ for it in tqdm.trange(5000):
         with T.no_grad():
             z[~done] = z[~done].scatter_add(1, action[~terminate], T.ones(action[~terminate].shape, dtype=T.long, device=device))
 
-    lr = T.stack([log_reward(row.flip(0)) for  row in z])
+    strs = [str_convert(row.flip(0)) for row in z]
+    lr = lmreward.str_likelihood(strs)
     ll_diff -= lr
 
     loss = (ll_diff**2).sum()/(bs)
@@ -137,8 +108,8 @@ for it in tqdm.trange(5000):
     zs.append(Z.item())
 
     if it%100==0: 
-        print('loss =', np.array(losses[-100:]).mean(), 'Z =', Z.item())
-        emp_dist = np.bincount(all_visited[-50000:], minlength=2**edges).astype(float)
+        print('loss =', np.array(losses[-50000:]).mean(), 'Z =', Z.item())
+        emp_dist = np.bincount(all_visited[-20000:], minlength=2**edges).astype(float)
         emp_dist /= emp_dist.sum()
 
 pickle.dump([losses,zs,all_visited,first_visit, nodes, edges], open(f'out.pkl','wb'))
